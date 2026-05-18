@@ -1,0 +1,117 @@
+{
+  "state": "Indiana",
+  "district": "IN-09",
+  "last_updated": "2026-05-12",
+  "dynamic_answers": {
+    "president": {
+      "answers": [
+        "Donald Trump",
+        "President Trump",
+        "Trump",
+        "Donald J. Trump"
+      ],
+      "choices": [
+        "Donald Trump",
+        "JD Vance",
+        "Mike Johnson",
+        "John Roberts"
+      ]
+    },
+    "vice_president": {
+      "answers": [
+        "JD Vance",
+        "J.D. Vance",
+        "Vice President JD Vance",
+        "Vance"
+      ],
+      "choices": [
+        "JD Vance",
+        "Donald Trump",
+        "Mike Johnson",
+        "John Roberts"
+      ]
+    },
+    "speaker_of_the_house": {
+      "answers": [
+        "Mike Johnson",
+        "Speaker Mike Johnson",
+        "Johnson"
+      ],
+      "choices": [
+        "Mike Johnson",
+        "JD Vance",
+        "John Roberts",
+        "Todd Young"
+      ]
+    },
+    "chief_justice": {
+      "answers": [
+        "John Roberts",
+        "John G. Roberts",
+        "Chief Justice John Roberts",
+        "John G. Roberts Jr.",
+        "John G. Roberts, Jr."
+      ],
+      "choices": [
+        "John Roberts",
+        "Donald Trump",
+        "Mike Johnson",
+        "JD Vance"
+      ]
+    },
+    "governor_indiana": {
+      "answers": [
+        "Mike Braun",
+        "Governor Mike Braun",
+        "Braun"
+      ],
+      "choices": [
+        "Mike Braun",
+        "Todd Young",
+        "Jim Banks",
+        "Erin Houchin"
+      ]
+    },
+    "senators_indiana": {
+      "answers": [
+        "Todd Young",
+        "Jim Banks",
+        "Senator Todd Young",
+        "Senator Jim Banks",
+        "Young",
+        "Banks"
+      ],
+      "choices": [
+        "Todd Young",
+        "Jim Banks",
+        "Erin Houchin",
+        "Mike Braun"
+      ]
+    },
+    "representative_in09": {
+      "answers": [
+        "Erin Houchin",
+        "Representative Erin Houchin",
+        "Congresswoman Erin Houchin",
+        "Houchin"
+      ],
+      "choices": [
+        "Erin Houchin",
+        "Todd Young",
+        "Jim Banks",
+        "Mike Braun"
+      ]
+    },
+    "capital_indiana": {
+      "answers": [
+        "Indianapolis"
+      ],
+      "choices": [
+        "Indianapolis",
+        "Fort Wayne",
+        "Evansville",
+        "Bloomington"
+      ]
+    }
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "questions": {
+    "9012": {
+      "seen": 1,
+      "spoken_correct": 1,
+      "knowledge_correct": 1,
+      "missed": 0,
+      "review_needed": 0,
+      "last_seen": "2026-05-13T17:16:04.618528"
+    },
+    "9002": {
+      "seen": 2,
+      "spoken_correct": 2,
+      "knowledge_correct": 2,
+      "missed": 0,
+      "review_needed": 0,
+      "last_seen": "2026-05-13T17:51:50.328825"
+    },
+    "9013": {
+      "seen": 2,
+      "spoken_correct": 1,
+      "knowledge_correct": 2,
+      "missed": 0,
+      "review_needed": 1,
+      "last_seen": "2026-05-13T17:51:35.889394"
+    },
+    "9010": {
+      "seen": 3,
+      "spoken_correct": 1,
+      "knowledge_correct": 3,
+      "missed": 0,
+      "review_needed": 2,
+      "last_seen": "2026-05-13T17:50:54.999205"
+    },
+    "9014": {
+      "seen": 1,
+      "spoken_correct": 1,
+      "knowledge_correct": 1,
+      "missed": 0,
+      "review_needed": 0,
+      "last_seen": "2026-05-13T17:19:46.116103"
+    },
+    "9011": {
+      "seen": 1,
+      "spoken_correct": 1,
+      "knowledge_correct": 1,
+      "missed": 0,
+      "review_needed": 0,
+      "last_seen": "2026-05-13T17:20:14.474439"
+    },
+    "9003": {
+      "seen": 2,
+      "spoken_correct": 1,
+      "knowledge_correct": 1,
+      "missed": 1,
+      "review_needed": 0,
+      "last_seen": "2026-05-13T18:28:41.390669"
+    },
+    "9001": {
+      "seen": 1,
+      "spoken_correct": 0,
+      "knowledge_correct": 1,
+      "missed": 0,
+      "review_needed": 1,
+      "last_seen": "2026-05-13T17:52:49.830452"
+    },
+    "121": {
+      "seen": 1,
+      "spoken_correct": 0,
+      "knowledge_correct": 1,
+      "missed": 0,
+      "review_needed": 1,
+      "last_seen": "2026-05-13T18:43:13.791836"
+    },
+    "52": {
+      "seen": 1,
+      "spoken_correct": 1,
+      "knowledge_correct": 1,
+      "missed": 0,
+      "review_needed": 0,
+      "last_seen": "2026-05-13T18:43:28.241415"
+    }
+  },
+  "sessions": [],
+  "created_at": "2026-05-13T13:31:27.655862"
+}
