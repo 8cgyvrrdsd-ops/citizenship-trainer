@@ -3,6 +3,9 @@ import random
 import re
 import subprocess
 import tempfile
+import shutil
+import platform
+import os
 import time
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -16,11 +19,35 @@ except ImportError:
     sr = None
 
 APP_TITLE = "Ket's Citizenship Trainer"
+
+# Cloud-safe path setup
+# Streamlit Cloud may run from the repository root, while this app lives in Kapp/app.py.
+# Always resolve files relative to this app.py file first, then fall back to current working directory.
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
+IS_MAC = platform.system() == "Darwin"
+HAS_MAC_SAY = shutil.which("say") is not None
+
+
 def existing_path(*paths):
-    for path in paths:
+    candidates = []
+    for raw_path in paths:
+        path = Path(raw_path)
+        if path.is_absolute():
+            candidates.append(path)
+        else:
+            candidates.append(BASE_DIR / path)
+            candidates.append(Path.cwd() / path)
+            if path.parent == Path("."):
+                candidates.append(DATA_DIR / path.name)
+
+    for path in candidates:
         if path.exists():
             return path
-    return paths[0]
+
+    first = Path(paths[0])
+    return first if first.is_absolute() else BASE_DIR / first
+
 
 QUESTIONS_FILE = existing_path(Path("questions.json"), Path("data/questions.json"))
 QUESTIONS_HARD_FILE = existing_path(Path("questions_hard.json"), Path("data/questions_hard.json"))
@@ -230,6 +257,7 @@ def load_progress():
 
 
 def save_progress(progress):
+    PROGRESS_FILE.parent.mkdir(parents=True, exist_ok=True)
     PROGRESS_FILE.write_text(json.dumps(progress, indent=2), encoding="utf-8")
 
 
@@ -443,6 +471,13 @@ def move_to_next_question():
 # -----------------------------
 
 def speak_text_mac(text, voice_name=None, wait=False):
+    """
+    Local Mac: uses the built-in `say` command.
+    Streamlit Cloud/Linux: safely does nothing and returns False.
+    """
+    if not HAS_MAC_SAY:
+        return False
+
     try:
         command = ["say"]
         if voice_name:
@@ -450,7 +485,7 @@ def speak_text_mac(text, voice_name=None, wait=False):
         command.append(text)
 
         if wait:
-            subprocess.run(command)
+            subprocess.run(command, check=False)
         else:
             subprocess.Popen(command)
 
@@ -460,8 +495,9 @@ def speak_text_mac(text, voice_name=None, wait=False):
 
 
 def speak_feedback_then_pause(message, voice_name=None):
-    speak_text_mac(message, voice_name, wait=True)
-    time.sleep(VOICE_FEEDBACK_PAUSE_SECONDS)
+    spoke = speak_text_mac(message, voice_name, wait=True)
+    if spoke:
+        time.sleep(VOICE_FEEDBACK_PAUSE_SECONDS)
 
 
 def transcribe_audio(audio_file):
@@ -1482,6 +1518,12 @@ dynamic_data = load_dynamic_answers()
 # It must run before civics questions are loaded.
 with st.sidebar:
     st.header("Question Source")
+    st.caption("Cloud-safe file loading active.")
+    if HAS_MAC_SAY:
+        st.caption("Interviewer voice: Mac voice available.")
+    else:
+        st.caption("Interviewer voice: text-only on cloud; recording/transcription still works.")
+
 
     st.session_state.civics_difficulty = st.radio(
         "Civics Exam Difficulty",
@@ -1541,9 +1583,11 @@ with st.sidebar:
     st.metric("Missed", total_missed)
 
     st.write(f"Question bank loaded: **{len(questions)}**")
+    if not st.session_state.get("interview_mode", False):
+        st.caption(f"Question file path: {QUESTIONS_HARD_FILE if st.session_state.get("civics_difficulty", "Easy") == "Hard" else QUESTIONS_FILE}")
 
     st.info("Real USCIS Question Bank Active")
-    st.caption("Using: questions.json or questions_hard.json")
+    st.caption(f"Using: {QUESTIONS_HARD_FILE.name if st.session_state.get("civics_difficulty", "Easy") == "Hard" else QUESTIONS_FILE.name}")
 
     if st.session_state.get("interview_mode", False):
         st.success("Interview Mode Active")
