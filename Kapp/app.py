@@ -411,6 +411,7 @@ def fresh_answer_key():
 
 
 def start_new_session(mode, questions, special_only=False):
+    reset_browser_voice_choice()
     progress = load_progress()
 
     st.session_state.session_questions = build_session_questions(progress, mode, questions, special_only)
@@ -477,27 +478,137 @@ def queue_browser_speech(text):
         st.session_state["_browser_speech_text"] = str(text)
 
 
+def reset_browser_voice_choice():
+    """Pick a fresh browser TTS voice for the next test/session.
+
+    Python cannot see the browser's installed voices, so we set a flag.
+    The browser-side JavaScript clears its saved voice and randomly selects
+    a new natural-sounding English voice the next time it speaks.
+    """
+    st.session_state["_browser_speech_reset_voice"] = True
+
+
 def render_browser_speech():
     """Render queued browser speech using the Web Speech API.
 
-    This works in the tester's browser and avoids Mac-only `say` on Streamlit Cloud.
-    Browsers may require the user to click Begin/Repeat before speech is allowed.
+    Cloud/free voice strategy:
+    - Use browser SpeechSynthesis voices.
+    - Prefer natural English voices when available.
+    - Randomly select one voice per test/session.
+    - Keep the same voice during that test/session.
+    - Clear/re-randomize when start_new_session() or start_n400_flow() runs.
+
+    Voice quality depends on the tester's device/browser.
     """
     text = st.session_state.get("_browser_speech_text", "")
-    if not text:
+    reset_voice = bool(st.session_state.get("_browser_speech_reset_voice", False))
+
+    if not text and not reset_voice:
         return
 
     safe_text = json.dumps(text)
+    safe_reset = "true" if reset_voice else "false"
+
     html = f"""
         <script>
         const text = {safe_text};
+        const resetVoice = {safe_reset};
+        const VOICE_KEY = "citizenship_trainer_browser_voice";
+
+        function shuffle(array) {{
+            for (let i = array.length - 1; i > 0; i--) {{
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }}
+            return array;
+        }}
+
+        function voiceScore(voice) {{
+            const name = (voice.name || "").toLowerCase();
+            const lang = (voice.lang || "").toLowerCase();
+            let score = 0;
+
+            if (lang.startsWith("en-us")) score += 40;
+            else if (lang.startsWith("en-gb") || lang.startsWith("en-ca") || lang.startsWith("en-au")) score += 25;
+            else if (lang.startsWith("en")) score += 15;
+            else score -= 100;
+
+            const preferred = [
+                "google us english",
+                "google english",
+                "microsoft jenny",
+                "microsoft aria",
+                "microsoft guy",
+                "microsoft davis",
+                "samantha",
+                "alex",
+                "daniel",
+                "victoria",
+                "karen",
+                "aaron",
+                "susan",
+                "zira",
+                "natural",
+                "premium",
+                "enhanced"
+            ];
+
+            for (const p of preferred) {{
+                if (name.includes(p)) score += 25;
+            }}
+
+            // Avoid novelty/compact voices where possible.
+            const avoid = ["whisper", "bells", "zarvox", "trinoids", "boing", "cellos", "bad news", "good news"];
+            for (const a of avoid) {{
+                if (name.includes(a)) score -= 60;
+            }}
+
+            return score;
+        }}
+
+        function chooseVoice(voices) {{
+            if (!voices || voices.length === 0) return null;
+
+            if (resetVoice) {{
+                try {{ sessionStorage.removeItem(VOICE_KEY); }} catch (e) {{}}
+            }}
+
+            let savedName = null;
+            try {{ savedName = sessionStorage.getItem(VOICE_KEY); }} catch (e) {{}}
+
+            if (savedName) {{
+                const saved = voices.find(v => v.name === savedName);
+                if (saved) return saved;
+            }}
+
+            const english = voices.filter(v => (v.lang || "").toLowerCase().startsWith("en"));
+            const candidates = (english.length ? english : voices)
+                .map(v => ({{voice: v, score: voiceScore(v)}}))
+                .filter(x => x.score > -50)
+                .sort((a, b) => b.score - a.score);
+
+            const topScore = candidates.length ? candidates[0].score : 0;
+            const top = candidates.filter(x => x.score >= topScore - 15).map(x => x.voice);
+            const pool = top.length ? top : (english.length ? english : voices);
+            const selected = shuffle(pool.slice())[0];
+
+            try {{ sessionStorage.setItem(VOICE_KEY, selected.name); }} catch (e) {{}}
+            return selected;
+        }}
+
         function speakNow() {{
             try {{
                 const synth = window.speechSynthesis;
-                if (!synth) return;
+                if (!synth || !text) return;
+
+                const voices = synth.getVoices();
+                const selectedVoice = chooseVoice(voices);
+
                 synth.cancel();
                 const utterance = new SpeechSynthesisUtterance(text);
-                utterance.rate = 0.9;
+                if (selectedVoice) utterance.voice = selectedVoice;
+                utterance.lang = selectedVoice ? selectedVoice.lang : "en-US";
+                utterance.rate = 0.86;
                 utterance.pitch = 1.0;
                 utterance.volume = 1.0;
                 synth.speak(utterance);
@@ -505,11 +616,19 @@ def render_browser_speech():
                 console.log("Browser speech failed", e);
             }}
         }}
-        speakNow();
+
+        // Browser voices often load asynchronously. Try now, then retry once.
+        if (window.speechSynthesis && window.speechSynthesis.getVoices().length === 0) {{
+            window.speechSynthesis.onvoiceschanged = speakNow;
+            setTimeout(speakNow, 500);
+        }} else {{
+            speakNow();
+        }}
         </script>
     """
     components.html(html, height=0)
     st.session_state["_browser_speech_text"] = ""
+    st.session_state["_browser_speech_reset_voice"] = False
 
 
 def speak_text_mac(text, voice_name=None, wait=False):
@@ -1130,6 +1249,7 @@ def reset_n400_flow_state():
 
 
 def start_n400_flow(section):
+    reset_browser_voice_choice()
     st.session_state.n400_flow_section = section
     st.session_state.n400_flow_index = 0
     st.session_state.n400_flow_started = False
