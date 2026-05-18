@@ -12,6 +12,7 @@ from pathlib import Path
 from datetime import datetime
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 try:
     import speech_recognition as sr
@@ -470,12 +471,54 @@ def move_to_next_question():
 # Audio / speech
 # -----------------------------
 
+def queue_browser_speech(text):
+    """Queue browser text-to-speech for Streamlit Cloud or non-Mac systems."""
+    if text:
+        st.session_state["_browser_speech_text"] = str(text)
+
+
+def render_browser_speech():
+    """Render queued browser speech using the Web Speech API.
+
+    This works in the tester's browser and avoids Mac-only `say` on Streamlit Cloud.
+    Browsers may require the user to click Begin/Repeat before speech is allowed.
+    """
+    text = st.session_state.get("_browser_speech_text", "")
+    if not text:
+        return
+
+    safe_text = json.dumps(text)
+    html = f"""
+        <script>
+        const text = {safe_text};
+        function speakNow() {{
+            try {{
+                const synth = window.speechSynthesis;
+                if (!synth) return;
+                synth.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 0.9;
+                utterance.pitch = 1.0;
+                utterance.volume = 1.0;
+                synth.speak(utterance);
+            }} catch (e) {{
+                console.log("Browser speech failed", e);
+            }}
+        }}
+        speakNow();
+        </script>
+    """
+    components.html(html, height=0)
+    st.session_state["_browser_speech_text"] = ""
+
+
 def speak_text_mac(text, voice_name=None, wait=False):
     """
     Local Mac: uses the built-in `say` command.
-    Streamlit Cloud/Linux: safely does nothing and returns False.
+    Streamlit Cloud/Linux: queues browser text-to-speech instead.
     """
     if not HAS_MAC_SAY:
+        queue_browser_speech(text)
         return False
 
     try:
@@ -491,6 +534,7 @@ def speak_text_mac(text, voice_name=None, wait=False):
 
         return True
     except Exception:
+        queue_browser_speech(text)
         return False
 
 
@@ -1509,6 +1553,9 @@ def run_n400_module():
 
 st.set_page_config(page_title=APP_TITLE, page_icon="🇺🇸", layout="centered")
 
+# Plays queued browser TTS after button-triggered reruns on Streamlit Cloud.
+render_browser_speech()
+
 st.title("🇺🇸 Ket's Citizenship Trainer")
 st.caption("Voice-first interview trainer prototype. Civics and N-400 both use audio-first practice.")
 
@@ -1907,3 +1954,7 @@ if st.session_state.revealed:
 
             move_to_next_question()
             st.rerun()
+
+
+# Final browser TTS render point for button clicks that do not rerun immediately.
+render_browser_speech()
