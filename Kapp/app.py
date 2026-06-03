@@ -91,7 +91,6 @@ def process_civics_response(answer: str, item: dict, expected_answers: list[str]
         st.session_state.civics_feedback = "correct"
         st.session_state.civics_last_answer = answer
         st.session_state.civics_last_answer_source = source
-        st.session_state.civics_answer = ""
     else:
         st.session_state.civics_answered += 1
         st.session_state.civics_show_mc = True
@@ -156,7 +155,6 @@ def reset_civics_exam(questions: list[dict], session_len: int = 20):
     st.session_state.civics_wrong_review = []
     st.session_state.civics_show_mc = False
     st.session_state.civics_feedback = None
-    st.session_state.civics_answer = ""
     st.session_state.civics_last_processed_voice = None
     st.session_state.civics_last_answer = ""
     st.session_state.civics_last_answer_source = None
@@ -175,7 +173,7 @@ def check_answer(expected: str, user_answer: str, strict: bool = False):
     return "Needs practice", score
 
 
-def speak_button(text: str, label: str = "▶ Play officer voice"):
+def speak_button(text: str, label: str = "▶ Replay officer voice"):
     safe_text = json.dumps(text)
     safe_label = json.dumps(label)
     components.html(
@@ -194,6 +192,31 @@ def speak_button(text: str, label: str = "▶ Play officer voice"):
         </script>
         """,
         height=55,
+    )
+
+
+def auto_speak_once(text: str, unique_key: str):
+    """Automatically play the officer question once when a new question loads."""
+    safe_text = json.dumps(text)
+    safe_key = json.dumps(unique_key)
+    components.html(
+        f"""
+        <script>
+        const questionKey = {safe_key};
+        const lastKey = window.parent.sessionStorage.getItem('last_civics_spoken_key');
+        if (lastKey !== questionKey) {{
+            window.parent.sessionStorage.setItem('last_civics_spoken_key', questionKey);
+            setTimeout(() => {{
+                const msg = new SpeechSynthesisUtterance({safe_text});
+                msg.rate = 0.82;
+                msg.pitch = 1.0;
+                window.parent.speechSynthesis.cancel();
+                window.parent.speechSynthesis.speak(msg);
+            }}, 350);
+        }}
+        </script>
+        """,
+        height=0,
     )
 
 
@@ -375,31 +398,24 @@ elif module == "Civics Practice":
             elif feedback == "mc_correct":
                 st.success("Correct from multiple choice. Next question loaded.")
 
-            speak_button(item["question"])
+            auto_speak_once(item["question"], f"civics_{pos}_{q_index}")
             big_card("Officer asks", item["question"])
-            st.markdown("### Answer")
-            st.caption("Click Record, speak the answer, then stop. The app shows the transcript and checks it automatically. If the browser microphone is unavailable, type the answer and click Check typed answer.")
+            speak_button(item["question"], label="▶ Replay officer voice")
+            st.markdown("### Answer by voice")
+            st.caption("Click Record, answer out loud, then stop. The app shows what it heard and checks the answer automatically.")
 
-            voice_key = f"civics_voice_{pos}_{q_index}"
-            transcript = record_answer_box(voice_key)
+            # Keep a stable recorder key to reduce microphone re-permission prompts between questions.
+            transcript = record_answer_box("civics_voice_recorder")
             if transcript:
                 st.info(f"Heard: {transcript}")
                 processed_key = f"{pos}|{q_index}|{normalize(transcript)}"
                 if st.session_state.get("civics_last_processed_voice") != processed_key:
                     st.session_state.civics_last_processed_voice = processed_key
                     process_civics_response(transcript, item, expected_answers, source="voice")
-                    st.rerun()
-
-            with st.form("civics_form", clear_on_submit=False):
-                answer = st.text_input("Or type the student's answer here:", key="civics_answer")
-                submitted = st.form_submit_button("Check typed answer")
-
-            if submitted:
-                process_civics_response(answer, item, expected_answers, source="typed")
-                if answer_is_blank(answer):
-                    st.error("No answer entered. Blank answers do not pass.")
-                else:
-                    st.rerun()
+                    if answer_is_blank(transcript):
+                        st.error("No answer heard. Blank answers do not pass.")
+                    else:
+                        st.rerun()
 
             if st.session_state.get("civics_feedback") == "wrong" and st.session_state.get("civics_show_mc"):
                 st.warning("Not quite. Try the multiple-choice fallback.")
@@ -414,7 +430,6 @@ elif module == "Civics Practice":
                         st.session_state.civics_exam_pos += 1
                         st.session_state.civics_show_mc = False
                         st.session_state.civics_feedback = "mc_correct"
-                        st.session_state.civics_answer = ""
                         st.rerun()
                     else:
                         st.error("Still not correct. Review the acceptable answer below.")
@@ -428,7 +443,6 @@ elif module == "Civics Practice":
                     st.session_state.civics_exam_pos += 1
                     st.session_state.civics_show_mc = False
                     st.session_state.civics_feedback = None
-                    st.session_state.civics_answer = ""
                     st.rerun()
 
             with st.expander("Session controls"):

@@ -5,7 +5,8 @@ Local/Streamlit app for citizenship practice using generic USCIS-style materials
 ## What's included
 
 - Civics Practice
-  - Officer voice
+  - Officer voice auto-plays on each new question
+  - Replay officer voice button
   - Record answer button
   - Transcript returns directly to the app
   - Automatic answer verification after recording
@@ -52,4 +53,4 @@ For privacy, the N-400 Interview Practice section should be used mainly for spea
 
 ## Microphone note
 
-The record button uses `streamlit-mic-recorder`, which relies on browser speech recognition. Chrome is usually the most reliable browser. If the browser blocks the microphone, the typed answer box still works.
+The record button uses `streamlit-mic-recorder`, which relies on browser speech recognition. Chrome is usually the most reliable browser. This build removes typed civics answers so practice matches the interview flow better.
