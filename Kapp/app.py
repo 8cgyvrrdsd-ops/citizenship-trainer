@@ -158,6 +158,7 @@ def reset_civics_exam(questions: list[dict], session_len: int = 20):
     st.session_state.civics_last_processed_voice = None
     st.session_state.civics_last_answer = ""
     st.session_state.civics_last_answer_source = None
+    st.session_state.civics_mc_review_answer = False
 
 
 def check_answer(expected: str, user_answer: str, strict: bool = False):
@@ -394,9 +395,13 @@ elif module == "Civics Practice":
 
             feedback = st.session_state.get("civics_feedback")
             if feedback == "correct":
-                st.success("Correct. Next question loaded.")
+                st.success("Correct.")
+                st.caption("Moving to the next question.")
+                st.session_state.civics_feedback = None
             elif feedback == "mc_correct":
-                st.success("Correct from multiple choice. Next question loaded.")
+                st.success("Correct.")
+                st.caption("Moving to the next question.")
+                st.session_state.civics_feedback = None
 
             auto_speak_once(item["question"], f"civics_{pos}_{q_index}")
             big_card("Officer asks", item["question"])
@@ -423,6 +428,9 @@ elif module == "Civics Practice":
                     st.session_state[f"civics_choices_{pos}"] = make_civics_choices(item, questions)
                 choices = st.session_state[f"civics_choices_{pos}"]
                 mc = st.radio("Choose an acceptable answer:", choices, key=f"civics_mc_{pos}")
+                if "civics_mc_review_answer" not in st.session_state:
+                    st.session_state.civics_mc_review_answer = False
+
                 if st.button("Check multiple choice"):
                     if any(normalize(mc) == normalize(a) for a in expected_answers):
                         st.session_state.civics_correct += 1
@@ -430,20 +438,26 @@ elif module == "Civics Practice":
                         st.session_state.civics_exam_pos += 1
                         st.session_state.civics_show_mc = False
                         st.session_state.civics_feedback = "mc_correct"
+                        st.session_state.civics_mc_review_answer = False
                         st.rerun()
                     else:
+                        st.session_state.civics_mc_review_answer = True
                         st.error("Still not correct. Review the acceptable answer below.")
 
-                st.markdown("### Correct answer review")
-                st.success(", ".join(expected_answers))
-                st.caption("In the real civics test, many questions have more than one acceptable answer. She only needs to give one acceptable answer.")
+                # Do not show the correct answer before the student tries multiple choice.
+                # Show it only after the multiple-choice answer is also incorrect.
+                if st.session_state.get("civics_mc_review_answer"):
+                    st.markdown("### Correct answer review")
+                    st.success(", ".join(expected_answers))
+                    st.caption("In the real civics test, many questions have more than one acceptable answer. She only needs to give one acceptable answer.")
 
-                st.divider()
-                if st.button("Next question", type="primary"):
-                    st.session_state.civics_exam_pos += 1
-                    st.session_state.civics_show_mc = False
-                    st.session_state.civics_feedback = None
-                    st.rerun()
+                    st.divider()
+                    if st.button("Next question", type="primary"):
+                        st.session_state.civics_exam_pos += 1
+                        st.session_state.civics_show_mc = False
+                        st.session_state.civics_feedback = None
+                        st.session_state.civics_mc_review_answer = False
+                        st.rerun()
 
             with st.expander("Session controls"):
                 st.write(f"This practice session asks up to **20 questions**. Current data file has **{len(questions)} questions**, so this session has **{len(st.session_state.civics_exam_indices)}** questions.")
