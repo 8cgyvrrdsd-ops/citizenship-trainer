@@ -1,31 +1,48 @@
-# USCIS Citizenship Practice App - Next Build
+# USCIS Citizenship Practice App
 
-## What this build adds
-- M-715 Reading Vocabulary module
-- Writing Test Practice module using official-style USCIS writing vocabulary sentences
-- N-400 Vocabulary Self-Test 2 module
-  - Multiple choice meaning quiz
-  - Matching exercise
-  - Fill-in conversation exercise
-- Generic N-400 Interview Practice prompts
-- No personal information in uploaded files
+Local/Streamlit app for citizenship practice using generic USCIS-style materials only.
+
+## What's included
+
+- Civics Practice
+  - Officer voice
+  - Browser speech helper
+  - Typed/pasted answer check
+  - Blank answers no longer pass
+
+- N-400 Interview Practice
+  - Generic prompts only
+  - Recommended as speak-aloud practice
+  - No personal answer verification
+  - No personal answers are saved
+
+- N-400 Vocabulary
+  - Meaning quiz with auto-next on correct answers
+  - Matching exercise with wrong answers listed under the score
+  - Fill-in conversation with green/red feedback under each item
+  - Word list for later improvement
+
+- Reading Test Practice
+  - M-715 flashcards
+  - Sentence reading
+  - Test simulation
+  - Coverage list
+
+- Writing Test Practice
+  - Dictation with officer voice
+  - Forgiving answer check
+  - Auto-next when correct
+  - Feedback plus next-question button when not correct
 
 ## Run locally
+
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Files to upload to GitHub
-Upload all of these:
-- `app.py`
-- `requirements.txt`
-- `README.md`
-- `data/reading_vocab_m715.json`
-- `data/writing_practice.json`
-- `data/n400_vocab_self_test2.json`
-- `data/n400_personal_prompts.json`
-- `data/civics_sample.json`
+## Privacy / PI note
 
-## Privacy note
-This build contains no real applicant personal information. Personal answers typed during practice are not saved to files.
+This build contains no user personal information. The data files contain only generic USCIS-style practice content and placeholders such as `[your full name]`.
+
+For privacy, the N-400 Interview Practice section should be used mainly for speak-aloud practice. Do not type real personal answers into a public/shared app.
