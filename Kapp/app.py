@@ -7,6 +7,11 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
+try:
+    from streamlit_mic_recorder import speech_to_text
+except Exception:
+    speech_to_text = None
+
 APP_TITLE = "USCIS Citizenship Practice App"
 DATA_DIR = Path(__file__).parent / "data"
 
@@ -70,6 +75,52 @@ def civics_is_correct(user_answer: str, expected_answers: list[str]) -> bool:
     return False
 
 
+def process_civics_response(answer: str, item: dict, expected_answers: list[str], source: str = "typed"):
+    """Score one civics response exactly once, then update the practice flow."""
+    if answer_is_blank(answer):
+        st.session_state.civics_show_mc = False
+        st.session_state.civics_feedback = "blank"
+        st.session_state.civics_last_answer_source = source
+        return
+
+    if civics_is_correct(answer, expected_answers):
+        st.session_state.civics_correct += 1
+        st.session_state.civics_answered += 1
+        st.session_state.civics_exam_pos += 1
+        st.session_state.civics_show_mc = False
+        st.session_state.civics_feedback = "correct"
+        st.session_state.civics_last_answer = answer
+        st.session_state.civics_last_answer_source = source
+        st.session_state.civics_answer = ""
+    else:
+        st.session_state.civics_answered += 1
+        st.session_state.civics_show_mc = True
+        st.session_state.civics_feedback = "wrong"
+        st.session_state.civics_last_answer = answer
+        st.session_state.civics_last_answer_source = source
+        st.session_state.civics_wrong_review.append({
+            "question": item["question"],
+            "answers": expected_answers,
+            "user_answer": answer,
+        })
+
+
+def record_answer_box(key: str):
+    """Return browser speech transcript directly to Streamlit when the mic package is available."""
+    if speech_to_text is None:
+        st.error("Microphone recorder package is missing. Run: pip install -r requirements.txt")
+        st.caption("Fallback: type the answer in the box below.")
+        return None
+    return speech_to_text(
+        language="en",
+        start_prompt="🎙 Record answer",
+        stop_prompt="⏹ Stop recording",
+        just_once=True,
+        use_container_width=True,
+        key=key,
+    )
+
+
 def make_civics_choices(item: dict, all_questions: list[dict], max_choices: int = 4) -> list[str]:
     """Build a simple multiple-choice fallback: correct answer + plausible answers from other questions."""
     correct = item.get("answers", [""])[0]
@@ -106,6 +157,9 @@ def reset_civics_exam(questions: list[dict], session_len: int = 20):
     st.session_state.civics_show_mc = False
     st.session_state.civics_feedback = None
     st.session_state.civics_answer = ""
+    st.session_state.civics_last_processed_voice = None
+    st.session_state.civics_last_answer = ""
+    st.session_state.civics_last_answer_source = None
 
 
 def check_answer(expected: str, user_answer: str, strict: bool = False):
@@ -264,7 +318,7 @@ if module == "Home / Coverage":
     st.markdown("### Modules included")
     st.markdown(
         """
-        - **Civics Practice**: officer voice, browser speech helper, typed answer check, blank answers no longer pass.
+        - **Civics Practice**: officer voice, mic recording, automatic transcript verification, multiple-choice fallback, 20-question scoring.
         - **N-400 Interview Practice**: generic prompts only; recommended as speak-aloud practice, not saved-answer practice.
         - **N-400 Vocabulary**: Self-Test 2 meaning quiz, matching, fill-in conversation, and word list.
         - **Reading Test Practice**: M-715 flashcards, reading sentences, test simulation, and coverage list.
@@ -323,34 +377,29 @@ elif module == "Civics Practice":
 
             speak_button(item["question"])
             big_card("Officer asks", item["question"])
-            st.caption("Record is browser-dependent and may not work reliably in Streamlit. For scoring, type the answer. If it is wrong, the app gives multiple choice practice.")
+            st.markdown("### Answer")
+            st.caption("Click Record, speak the answer, then stop. The app shows the transcript and checks it automatically. If the browser microphone is unavailable, type the answer and click Check typed answer.")
+
+            voice_key = f"civics_voice_{pos}_{q_index}"
+            transcript = record_answer_box(voice_key)
+            if transcript:
+                st.info(f"Heard: {transcript}")
+                processed_key = f"{pos}|{q_index}|{normalize(transcript)}"
+                if st.session_state.get("civics_last_processed_voice") != processed_key:
+                    st.session_state.civics_last_processed_voice = processed_key
+                    process_civics_response(transcript, item, expected_answers, source="voice")
+                    st.rerun()
 
             with st.form("civics_form", clear_on_submit=False):
-                answer = st.text_input("Type the student's answer here:", key="civics_answer")
-                submitted = st.form_submit_button("Check answer")
+                answer = st.text_input("Or type the student's answer here:", key="civics_answer")
+                submitted = st.form_submit_button("Check typed answer")
 
             if submitted:
+                process_civics_response(answer, item, expected_answers, source="typed")
                 if answer_is_blank(answer):
-                    st.session_state.civics_show_mc = False
-                    st.session_state.civics_feedback = "blank"
                     st.error("No answer entered. Blank answers do not pass.")
-                elif civics_is_correct(answer, expected_answers):
-                    st.session_state.civics_correct += 1
-                    st.session_state.civics_answered += 1
-                    st.session_state.civics_exam_pos += 1
-                    st.session_state.civics_show_mc = False
-                    st.session_state.civics_feedback = "correct"
-                    st.session_state.civics_answer = ""
-                    st.rerun()
                 else:
-                    st.session_state.civics_answered += 1
-                    st.session_state.civics_show_mc = True
-                    st.session_state.civics_feedback = "wrong"
-                    st.session_state.civics_wrong_review.append({
-                        "question": item["question"],
-                        "answers": expected_answers,
-                        "user_answer": answer,
-                    })
+                    st.rerun()
 
             if st.session_state.get("civics_feedback") == "wrong" and st.session_state.get("civics_show_mc"):
                 st.warning("Not quite. Try the multiple-choice fallback.")
