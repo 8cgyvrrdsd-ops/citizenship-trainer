@@ -1,0 +1,15 @@
+{
+  "privacy_note": "No personal information. Starter sample only. Replace with a full official civics JSON if desired.",
+  "questions": [
+    {"question": "What is the supreme law of the land?", "answers": ["the Constitution"]},
+    {"question": "What does the Constitution do?", "answers": ["sets up the government", "defines the government", "protects basic rights of Americans"]},
+    {"question": "The idea of self-government is in the first three words of the Constitution. What are these words?", "answers": ["We the People"]},
+    {"question": "What is an amendment?", "answers": ["a change to the Constitution", "an addition to the Constitution"]},
+    {"question": "What do we call the first ten amendments to the Constitution?", "answers": ["the Bill of Rights"]},
+    {"question": "What is one right or freedom from the First Amendment?", "answers": ["speech", "religion", "assembly", "press", "petition the government"]},
+    {"question": "How many amendments does the Constitution have?", "answers": ["twenty-seven", "27"]},
+    {"question": "What did the Declaration of Independence do?", "answers": ["announced our independence", "declared our independence", "said that the United States is free"]},
+    {"question": "What are two rights in the Declaration of Independence?", "answers": ["life and liberty", "liberty and the pursuit of happiness", "life and the pursuit of happiness"]},
+    {"question": "What is freedom of religion?", "answers": ["You can practice any religion, or not practice a religion."]}
+  ]
+}
