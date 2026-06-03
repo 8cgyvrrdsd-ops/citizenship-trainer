@@ -25,6 +25,16 @@ def load_json(filename: str) -> dict:
         return json.load(f)
 
 
+def load_first_existing(filenames: list[str]) -> dict:
+    """Load the first matching data file. Lets GitHub users drop in a full civics file without changing code."""
+    for filename in filenames:
+        path = DATA_DIR / filename
+        if path.exists():
+            with path.open("r", encoding="utf-8") as f:
+                return json.load(f)
+    return load_json(filenames[-1])
+
+
 def normalize(text: str) -> str:
     text = (text or "").lower().strip()
     text = text.replace("u.s.", "us")
@@ -58,6 +68,44 @@ def civics_is_correct(user_answer: str, expected_answers: list[str]) -> bool:
         if SequenceMatcher(None, ans, exp).ratio() >= 0.82:
             return True
     return False
+
+
+def make_civics_choices(item: dict, all_questions: list[dict], max_choices: int = 4) -> list[str]:
+    """Build a simple multiple-choice fallback: correct answer + plausible answers from other questions."""
+    correct = item.get("answers", [""])[0]
+    pool = []
+    for q in all_questions:
+        if q is item:
+            continue
+        for a in q.get("answers", []):
+            if normalize(a) != normalize(correct):
+                pool.append(a)
+    random.shuffle(pool)
+    choices = [correct] + pool[: max_choices - 1]
+    # Remove duplicates while preserving order.
+    deduped = []
+    seen = set()
+    for c in choices:
+        n = normalize(c)
+        if n and n not in seen:
+            deduped.append(c)
+            seen.add(n)
+    random.shuffle(deduped)
+    return deduped
+
+
+def reset_civics_exam(questions: list[dict], session_len: int = 20):
+    total = min(session_len, len(questions))
+    indices = list(range(len(questions)))
+    random.shuffle(indices)
+    st.session_state.civics_exam_indices = indices[:total]
+    st.session_state.civics_exam_pos = 0
+    st.session_state.civics_correct = 0
+    st.session_state.civics_answered = 0
+    st.session_state.civics_wrong_review = []
+    st.session_state.civics_show_mc = False
+    st.session_state.civics_feedback = None
+    st.session_state.civics_answer = ""
 
 
 def check_answer(expected: str, user_answer: str, strict: bool = False):
@@ -176,7 +224,7 @@ reading = load_json("reading_vocab_m715.json")
 writing = load_json("writing_practice.json")
 n400_vocab = load_json("n400_vocab_self_test2.json")
 n400_personal = load_json("n400_personal_prompts.json")
-civics = load_json("civics_sample.json")
+civics = load_first_existing(["civics.json", "civics_128.json", "civics_full.json", "civics_sample.json"])
 
 with st.sidebar:
     st.title("🇺🇸 Citizenship Practice")
@@ -230,45 +278,115 @@ if module == "Home / Coverage":
 # -----------------------------
 elif module == "Civics Practice":
     st.subheader("Civics Practice")
-    st.info("This is a starter civics set. Replace data/civics_sample.json with your full civics file when ready.")
+    st.write("Practice exam flow: answer the officer question. If the typed answer is acceptable, the app scores it correct and moves to the next question. If not, it shows a multiple-choice fallback and the correct answer review.")
 
     questions = civics.get("questions", [])
-    if "civics_idx" not in st.session_state:
-        st.session_state.civics_idx = 0
-    if "civics_checked" not in st.session_state:
-        st.session_state.civics_checked = False
+    session_len = min(20, len(questions))
 
-    if questions:
-        col_a, col_b = st.columns([1, 1])
-        with col_a:
-            if st.button("Random civics question"):
-                st.session_state.civics_idx = random.randrange(len(questions))
-                st.session_state.civics_checked = False
-        with col_b:
-            if st.button("Next civics question"):
-                st.session_state.civics_idx = (st.session_state.civics_idx + 1) % len(questions)
-                st.session_state.civics_checked = False
-
-        item = questions[st.session_state.civics_idx % len(questions)]
-        speak_button(item["question"])
-        big_card("Officer asks", item["question"])
-        browser_speech_box("civics")
-
-        with st.form("civics_form", clear_on_submit=False):
-            answer = st.text_input("Paste transcript here, or type the answer:", key="civics_answer")
-            submitted = st.form_submit_button("Check civics answer")
-        if submitted:
-            st.session_state.civics_checked = True
-            expected_answers = item.get("answers", [])
-            if answer_is_blank(answer):
-                st.error("No answer entered. Blank answers do not pass.")
-            elif civics_is_correct(answer, expected_answers):
-                st.success("Correct / acceptable.")
-            else:
-                st.warning("Needs practice. Review acceptable answer below.")
-            st.write("Acceptable answer(s):", ", ".join(expected_answers))
-    else:
+    if not questions:
         st.error("No civics questions found.")
+    else:
+        if "civics_exam_indices" not in st.session_state or not st.session_state.civics_exam_indices:
+            reset_civics_exam(questions, session_len=20)
+
+        # If the data file changed size or the session is complete, allow a clean restart.
+        if st.session_state.civics_exam_pos >= len(st.session_state.civics_exam_indices):
+            st.success("Civics practice session complete.")
+            st.metric("Final score", f"{st.session_state.civics_correct} / {st.session_state.civics_answered}")
+            if st.session_state.civics_wrong_review:
+                with st.expander("Review missed questions"):
+                    for row in st.session_state.civics_wrong_review:
+                        st.markdown(f"**Question:** {row['question']}")
+                        st.markdown(f"**Acceptable answer:** {', '.join(row['answers'])}")
+                        st.markdown(f"**Your answer:** {row.get('user_answer') or 'No typed answer'}")
+                        st.divider()
+            if st.button("Start new 20-question civics practice"):
+                reset_civics_exam(questions, session_len=20)
+                st.rerun()
+        else:
+            pos = st.session_state.civics_exam_pos
+            q_index = st.session_state.civics_exam_indices[pos]
+            item = questions[q_index]
+            expected_answers = item.get("answers", [])
+
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Question", f"{pos + 1} / {len(st.session_state.civics_exam_indices)}")
+            col2.metric("Score", f"{st.session_state.civics_correct} / {st.session_state.civics_answered}")
+            remaining = len(st.session_state.civics_exam_indices) - pos
+            col3.metric("Remaining", remaining)
+
+            feedback = st.session_state.get("civics_feedback")
+            if feedback == "correct":
+                st.success("Correct. Next question loaded.")
+            elif feedback == "mc_correct":
+                st.success("Correct from multiple choice. Next question loaded.")
+
+            speak_button(item["question"])
+            big_card("Officer asks", item["question"])
+            st.caption("Record is browser-dependent and may not work reliably in Streamlit. For scoring, type the answer. If it is wrong, the app gives multiple choice practice.")
+
+            with st.form("civics_form", clear_on_submit=False):
+                answer = st.text_input("Type the student's answer here:", key="civics_answer")
+                submitted = st.form_submit_button("Check answer")
+
+            if submitted:
+                if answer_is_blank(answer):
+                    st.session_state.civics_show_mc = False
+                    st.session_state.civics_feedback = "blank"
+                    st.error("No answer entered. Blank answers do not pass.")
+                elif civics_is_correct(answer, expected_answers):
+                    st.session_state.civics_correct += 1
+                    st.session_state.civics_answered += 1
+                    st.session_state.civics_exam_pos += 1
+                    st.session_state.civics_show_mc = False
+                    st.session_state.civics_feedback = "correct"
+                    st.session_state.civics_answer = ""
+                    st.rerun()
+                else:
+                    st.session_state.civics_answered += 1
+                    st.session_state.civics_show_mc = True
+                    st.session_state.civics_feedback = "wrong"
+                    st.session_state.civics_wrong_review.append({
+                        "question": item["question"],
+                        "answers": expected_answers,
+                        "user_answer": answer,
+                    })
+
+            if st.session_state.get("civics_feedback") == "wrong" and st.session_state.get("civics_show_mc"):
+                st.warning("Not quite. Try the multiple-choice fallback.")
+                if f"civics_choices_{pos}" not in st.session_state:
+                    st.session_state[f"civics_choices_{pos}"] = make_civics_choices(item, questions)
+                choices = st.session_state[f"civics_choices_{pos}"]
+                mc = st.radio("Choose an acceptable answer:", choices, key=f"civics_mc_{pos}")
+                if st.button("Check multiple choice"):
+                    if any(normalize(mc) == normalize(a) for a in expected_answers):
+                        st.session_state.civics_correct += 1
+                        # Multiple-choice recovery counts as correct for practice score, but the miss stays in review.
+                        st.session_state.civics_exam_pos += 1
+                        st.session_state.civics_show_mc = False
+                        st.session_state.civics_feedback = "mc_correct"
+                        st.session_state.civics_answer = ""
+                        st.rerun()
+                    else:
+                        st.error("Still not correct. Review the acceptable answer below.")
+
+                st.markdown("### Correct answer review")
+                st.success(", ".join(expected_answers))
+                st.caption("In the real civics test, many questions have more than one acceptable answer. She only needs to give one acceptable answer.")
+
+                st.divider()
+                if st.button("Next question", type="primary"):
+                    st.session_state.civics_exam_pos += 1
+                    st.session_state.civics_show_mc = False
+                    st.session_state.civics_feedback = None
+                    st.session_state.civics_answer = ""
+                    st.rerun()
+
+            with st.expander("Session controls"):
+                st.write(f"This practice session asks up to **20 questions**. Current data file has **{len(questions)} questions**, so this session has **{len(st.session_state.civics_exam_indices)}** questions.")
+                if st.button("Restart civics practice"):
+                    reset_civics_exam(questions, session_len=20)
+                    st.rerun()
 
 # -----------------------------
 # N-400 Personal Interview
@@ -297,7 +415,7 @@ elif module == "N-400 Interview Practice":
         p = filtered[st.session_state.n400_idx % len(filtered)]
         speak_button(p["question"])
         big_card(p["topic"], p["question"])
-        st.caption("Recommended: Ket answers out loud. Use the pattern only as a guide. No verification is attempted here because personal N-400 answers must match her actual application.")
+        st.caption("Recommended: the student answers out loud. Use the pattern only as a guide. No verification is attempted here because personal N-400 answers must match her actual application.")
 
         practice_mode = st.radio(
             "Practice method",
