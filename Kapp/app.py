@@ -415,14 +415,20 @@ elif module == "Civics Practice":
             just_got_correct = feedback in ("correct", "mc_correct")
             if just_got_correct:
                 st.success("Correct. Next question.")
-                auto_speak_once("Correct. Next question.", f"civics_correct_notice_{pos}_{q_index}_{st.session_state.civics_answered}", delay_ms=250)
+                # Speak the confirmation and the next question in ONE utterance.
+                # This avoids the browser dropping the automatic next-question voice after a rerun.
+                auto_speak_once(
+                    f"Correct. Next question. {item['question']}",
+                    f"civics_correct_and_question_{pos}_{q_index}_{st.session_state.civics_answered}",
+                    delay_ms=500,
+                    cancel_first=True,
+                )
                 st.session_state.civics_feedback = None
+            else:
+                # First load / normal question change: officer asks automatically.
+                auto_speak_once(item["question"], f"civics_question_{pos}_{q_index}", delay_ms=900, cancel_first=True)
 
-            # Add a longer pause after the correct notice so the next officer question does not start clipped or muted.
-            question_delay = 2400 if just_got_correct else 1200
-            auto_speak_once(item["question"], f"civics_{pos}_{q_index}", delay_ms=question_delay, cancel_first=not just_got_correct)
             st.markdown("### Listen to the officer question")
-            st.caption("The question is hidden to better simulate the interview. Use replay only if she needs to hear it again.")
             speak_button(item["question"], label="▶ Replay officer question")
             st.markdown("### Answer by voice")
             st.caption("Click Record, answer out loud, then stop. The app shows what it heard and checks the answer automatically.")
