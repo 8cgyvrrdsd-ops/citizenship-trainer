@@ -1,6 +1,7 @@
 import json
 import random
 import re
+import time
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -498,19 +499,27 @@ elif module == "Civics Practice":
             just_got_correct = feedback in ("correct", "mc_correct")
             if just_got_correct:
                 st.success("Correct. Next question.")
-                # Speak confirmation, pause, then ask the next question.
-                # The pause helps prevent the next officer voice from starting quiet or clipped.
-                auto_speak_sequence_once(
-                    ["Correct. Next question.", item["question"]],
-                    f"civics_correct_and_question_{pos}_{q_index}_{st.session_state.civics_answered}",
-                    delay_ms=900,
-                    pause_ms=1100,
+                # Audio cleanup: do NOT speak the confirmation and the next question in the
+                # same browser speech queue. That was causing clipped/choppy audio after
+                # Streamlit reruns and mic component refreshes.
+                #
+                # Step 1: speak only the confirmation.
+                auto_speak_once(
+                    "Correct. Next question.",
+                    f"civics_correct_confirm_{pos}_{q_index}_{st.session_state.civics_answered}",
+                    delay_ms=350,
                     cancel_first=True,
                 )
+                # Step 2: give the browser time to finish speaking before a clean rerun.
+                # On the next clean rerun, the officer question is asked by the normal
+                # auto_speak_once block below.
                 st.session_state.civics_feedback = None
+                time.sleep(2.2)
+                st.rerun()
             else:
-                # First load / normal question change: officer asks automatically.
-                auto_speak_once(item["question"], f"civics_question_{pos}_{q_index}_{civics_filename}", delay_ms=1400, cancel_first=True)
+                # First load / normal question change: officer asks automatically after a
+                # longer delay so browser audio and the mic component can finish initializing.
+                auto_speak_once(item["question"], f"civics_question_{pos}_{q_index}_{civics_filename}", delay_ms=2000, cancel_first=True)
 
             st.markdown("### Listen to the officer question")
             speak_button(item["question"], label="▶ Replay officer question")
