@@ -421,13 +421,14 @@ elif module == "Civics Practice":
             # Add a longer pause after the correct notice so the next officer question does not start clipped or muted.
             question_delay = 2400 if just_got_correct else 1200
             auto_speak_once(item["question"], f"civics_{pos}_{q_index}", delay_ms=question_delay, cancel_first=not just_got_correct)
-            big_card("Officer asks", item["question"])
-            speak_button(item["question"], label="▶ Replay officer voice")
+            st.markdown("### Listen to the officer question")
+            st.caption("The question is hidden to better simulate the interview. Use replay only if she needs to hear it again.")
+            speak_button(item["question"], label="▶ Replay officer question")
             st.markdown("### Answer by voice")
             st.caption("Click Record, answer out loud, then stop. The app shows what it heard and checks the answer automatically.")
 
-            # Keep a stable recorder key to reduce microphone re-permission prompts between questions.
-            transcript = record_answer_box("civics_voice_recorder")
+            # Use a fresh recorder key per question so the record button always reappears after multiple-choice recovery.
+            transcript = record_answer_box(f"civics_voice_recorder_{pos}_{q_index}")
             if transcript:
                 st.info(f"Heard: {transcript}")
                 processed_key = f"{pos}|{q_index}|{normalize(transcript)}"
