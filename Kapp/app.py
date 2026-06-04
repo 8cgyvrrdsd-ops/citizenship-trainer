@@ -398,18 +398,21 @@ elif module == "Civics Practice":
 
     use_hard_questions = st.toggle("Use hard/reworded civics questions", value=False)
     if use_hard_questions:
-        civics, civics_filename = load_first_existing_with_name(["questions_hard.json", "civics_hard.json", "civics_sample.json"])
+        civics, civics_filename = load_first_existing_with_name(["questions_hard.json"])
         st.caption(f"Question source: hard/reworded file — `{civics_filename}`")
     else:
         # Default must be the standard USCIS question file. Only fall back if it is not present.
-        civics, civics_filename = load_first_existing_with_name(["questions.json", "civics_128.json", "civics_full.json", "civics.json", "civics_sample.json"])
+        civics, civics_filename = load_first_existing_with_name(["questions.json"])
         st.caption(f"Question source: standard file — `{civics_filename}`")
 
     questions = civics.get("questions", [])
     session_len = min(20, len(questions))
 
     if not questions:
-        st.error("No civics questions found.")
+        if use_hard_questions:
+            st.error("No hard civics questions found. Add data/questions_hard.json, or turn off hard/reworded questions.")
+        else:
+            st.error("No standard civics questions found. Add data/questions.json. This build does not use civics_sample.json.")
     else:
         civics_source_key = f"{'hard' if use_hard_questions else 'standard'}:{civics_filename}:{len(questions)}"
         if (

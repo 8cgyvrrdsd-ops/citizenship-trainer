@@ -71,3 +71,8 @@ The record button uses `streamlit-mic-recorder`, which relies on browser speech 
 - The mic recorder now uses one stable component key to reduce repeated browser microphone permission prompts.
 - The app ignores stale recorder transcripts after reruns so the previous answer is not accidentally applied to the next question.
 - Spoken feedback is separated into two utterances with a pause: “Correct. Next question.” then the next officer question.
+
+
+## Civics question files
+
+Standard civics practice uses `data/questions.json` only. Hard/reworded mode uses `data/questions_hard.json` only when the toggle is selected. `civics_sample.json` is not used in this build.
