@@ -1,0 +1,15 @@
+{
+  "privacy_note": "No personal information. These are generic prompts only.",
+  "prompts": [
+    {"topic": "Name", "question": "What is your full legal name?", "sample_answer": "My full legal name is [your full name]."},
+    {"topic": "Date of Birth", "question": "What is your date of birth?", "sample_answer": "My date of birth is [month day, year]."},
+    {"topic": "Country of Birth", "question": "What is your country of birth?", "sample_answer": "My country of birth is [country]."},
+    {"topic": "Current Address", "question": "What is your current home address?", "sample_answer": "My current home address is [address]."},
+    {"topic": "Previous Addresses", "question": "Where did you live before your current address?", "sample_answer": "Before my current address, I lived at [previous address]."},
+    {"topic": "Employment", "question": "Where do you work now?", "sample_answer": "I work at [employer]."},
+    {"topic": "Employment", "question": "What is your occupation?", "sample_answer": "My occupation is [job title]."},
+    {"topic": "Family", "question": "What is your marital status?", "sample_answer": "I am [married/single/divorced/widowed]."},
+    {"topic": "Family", "question": "Do you have any children?", "sample_answer": "[Yes, I have children.] or [No, I do not have children.]"},
+    {"topic": "Travel", "question": "Have you taken any trips outside the United States in the past five years?", "sample_answer": "[Yes, I traveled to... ] or [No, I have not traveled outside the United States.]"}
+  ]
+}
