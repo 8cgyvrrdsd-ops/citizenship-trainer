@@ -196,10 +196,12 @@ def speak_button(text: str, label: str = "▶ Replay officer voice"):
     )
 
 
-def auto_speak_once(text: str, unique_key: str):
-    """Automatically play the officer question once when a new question loads."""
+def auto_speak_once(text: str, unique_key: str, delay_ms: int = 900, cancel_first: bool = True):
+    """Automatically speak text once per unique key. Delay helps prevent clipped/muted first words."""
     safe_text = json.dumps(text)
     safe_key = json.dumps(unique_key)
+    safe_delay = int(delay_ms)
+    safe_cancel = "true" if cancel_first else "false"
     components.html(
         f"""
         <script>
@@ -211,9 +213,10 @@ def auto_speak_once(text: str, unique_key: str):
                 const msg = new SpeechSynthesisUtterance({safe_text});
                 msg.rate = 0.82;
                 msg.pitch = 1.0;
-                window.parent.speechSynthesis.cancel();
+                msg.volume = 1.0;
+                if ({safe_cancel}) {{ window.parent.speechSynthesis.cancel(); }}
                 window.parent.speechSynthesis.speak(msg);
-            }}, 350);
+            }}, {safe_delay});
         }}
         </script>
         """,
@@ -302,7 +305,8 @@ reading = load_json("reading_vocab_m715.json")
 writing = load_json("writing_practice.json")
 n400_vocab = load_json("n400_vocab_self_test2.json")
 n400_personal = load_json("n400_personal_prompts.json")
-civics = load_first_existing(["civics.json", "civics_128.json", "civics_full.json", "civics_sample.json"])
+# Civics is loaded inside the Civics Practice module so the user can switch
+# between the standard question file and the hard/reworded question file.
 
 with st.sidebar:
     st.title("🇺🇸 Citizenship Practice")
@@ -356,7 +360,15 @@ if module == "Home / Coverage":
 # -----------------------------
 elif module == "Civics Practice":
     st.subheader("Civics Practice")
-    st.write("Practice exam flow: answer the officer question. If the typed answer is acceptable, the app scores it correct and moves to the next question. If not, it shows a multiple-choice fallback and the correct answer review.")
+    st.write("Practice exam flow: answer the officer question by voice. Correct answers score and move forward. Wrong answers show a multiple-choice fallback.")
+
+    use_hard_questions = st.toggle("Use hard/reworded civics questions", value=False)
+    if use_hard_questions:
+        civics = load_first_existing(["questions_hard.json", "civics_hard.json", "civics_sample.json"])
+        st.caption("Question source: hard/reworded file")
+    else:
+        civics = load_first_existing(["questions.json", "civics.json", "civics_128.json", "civics_full.json", "civics_sample.json"])
+        st.caption("Question source: standard questions file")
 
     questions = civics.get("questions", [])
     session_len = min(20, len(questions))
@@ -364,10 +376,16 @@ elif module == "Civics Practice":
     if not questions:
         st.error("No civics questions found.")
     else:
-        if "civics_exam_indices" not in st.session_state or not st.session_state.civics_exam_indices:
+        civics_source_key = "hard" if use_hard_questions else "standard"
+        if (
+            "civics_exam_indices" not in st.session_state
+            or not st.session_state.civics_exam_indices
+            or st.session_state.get("civics_source_key") != civics_source_key
+        ):
             reset_civics_exam(questions, session_len=20)
+            st.session_state.civics_source_key = civics_source_key
 
-        # If the data file changed size or the session is complete, allow a clean restart.
+        # If the session is complete, allow a clean restart.
         if st.session_state.civics_exam_pos >= len(st.session_state.civics_exam_indices):
             st.success("Civics practice session complete.")
             st.metric("Final score", f"{st.session_state.civics_correct} / {st.session_state.civics_answered}")
@@ -394,16 +412,15 @@ elif module == "Civics Practice":
             col3.metric("Remaining", remaining)
 
             feedback = st.session_state.get("civics_feedback")
-            if feedback == "correct":
-                st.success("Correct.")
-                st.caption("Moving to the next question.")
-                st.session_state.civics_feedback = None
-            elif feedback == "mc_correct":
-                st.success("Correct.")
-                st.caption("Moving to the next question.")
+            just_got_correct = feedback in ("correct", "mc_correct")
+            if just_got_correct:
+                st.success("Correct. Next question.")
+                auto_speak_once("Correct. Next question.", f"civics_correct_notice_{pos}_{q_index}_{st.session_state.civics_answered}", delay_ms=250)
                 st.session_state.civics_feedback = None
 
-            auto_speak_once(item["question"], f"civics_{pos}_{q_index}")
+            # Add a longer pause after the correct notice so the next officer question does not start clipped or muted.
+            question_delay = 2400 if just_got_correct else 1200
+            auto_speak_once(item["question"], f"civics_{pos}_{q_index}", delay_ms=question_delay, cancel_first=not just_got_correct)
             big_card("Officer asks", item["question"])
             speak_button(item["question"], label="▶ Replay officer voice")
             st.markdown("### Answer by voice")

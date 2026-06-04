@@ -54,3 +54,12 @@ For privacy, the N-400 Interview Practice section should be used mainly for spea
 ## Microphone note
 
 The record button uses `streamlit-mic-recorder`, which relies on browser speech recognition. Chrome is usually the most reliable browser. This build removes typed civics answers so practice matches the interview flow better.
+
+
+## Civics voice update
+
+- Default civics file is `data/questions.json` when present.
+- Use the in-app toggle to switch to `data/questions_hard.json`.
+- If those files are missing, the app falls back to the older `civics*.json` sample files.
+- Correct voice or multiple-choice answers now trigger spoken feedback: “Correct. Next question.”
+- The next officer question is delayed slightly to avoid clipped or muted audio at the start.
