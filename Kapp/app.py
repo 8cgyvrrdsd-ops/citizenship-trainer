@@ -32,12 +32,18 @@ def load_json(filename: str) -> dict:
 
 def load_first_existing(filenames: list[str]) -> dict:
     """Load the first matching data file. Lets GitHub users drop in a full civics file without changing code."""
+    data, _filename = load_first_existing_with_name(filenames)
+    return data
+
+
+def load_first_existing_with_name(filenames: list[str]) -> tuple[dict, str]:
+    """Load the first matching data file and return both data and the filename used."""
     for filename in filenames:
         path = DATA_DIR / filename
         if path.exists():
             with path.open("r", encoding="utf-8") as f:
-                return json.load(f)
-    return load_json(filenames[-1])
+                return json.load(f), filename
+    return load_json(filenames[-1]), filenames[-1]
 
 
 def normalize(text: str) -> str:
@@ -196,11 +202,16 @@ def speak_button(text: str, label: str = "▶ Replay officer voice"):
     )
 
 
-def auto_speak_once(text: str, unique_key: str, delay_ms: int = 900, cancel_first: bool = True):
-    """Automatically speak text once per unique key. Delay helps prevent clipped/muted first words."""
-    safe_text = json.dumps(text)
+def _speech_script_for_sequence(texts: list[str], unique_key: str, delay_ms: int = 1200, pause_ms: int = 850, cancel_first: bool = True):
+    """Speak one or more text chunks once per unique key.
+
+    Chaining utterances with a small pause reduces the common browser issue where
+    the first words are quiet or clipped after a Streamlit rerun.
+    """
+    safe_texts = json.dumps(texts)
     safe_key = json.dumps(unique_key)
     safe_delay = int(delay_ms)
+    safe_pause = int(pause_ms)
     safe_cancel = "true" if cancel_first else "false"
     components.html(
         f"""
@@ -209,20 +220,43 @@ def auto_speak_once(text: str, unique_key: str, delay_ms: int = 900, cancel_firs
         const lastKey = window.parent.sessionStorage.getItem('last_civics_spoken_key');
         if (lastKey !== questionKey) {{
             window.parent.sessionStorage.setItem('last_civics_spoken_key', questionKey);
-            setTimeout(() => {{
-                const msg = new SpeechSynthesisUtterance({safe_text});
-                msg.rate = 0.82;
-                msg.pitch = 1.0;
-                msg.volume = 1.0;
+            const texts = {safe_texts};
+            const startSpeaking = () => {{
                 if ({safe_cancel}) {{ window.parent.speechSynthesis.cancel(); }}
-                window.parent.speechSynthesis.speak(msg);
-            }}, {safe_delay});
+                let i = 0;
+                const speakNext = () => {{
+                    if (i >= texts.length) return;
+                    const msg = new SpeechSynthesisUtterance(texts[i]);
+                    msg.rate = 0.78;
+                    msg.pitch = 1.0;
+                    msg.volume = 1.0;
+                    i += 1;
+                    msg.onend = () => setTimeout(speakNext, {safe_pause});
+                    window.parent.speechSynthesis.speak(msg);
+                }};
+                // Give the browser audio engine a moment after cancel/rerun before speaking.
+                setTimeout(speakNext, 250);
+            }};
+            const waitForVoicesThenSpeak = () => {{
+                try {{ window.parent.speechSynthesis.getVoices(); }} catch(e) {{}}
+                setTimeout(startSpeaking, {safe_delay});
+            }};
+            waitForVoicesThenSpeak();
         }}
         </script>
         """,
         height=0,
     )
 
+
+def auto_speak_once(text: str, unique_key: str, delay_ms: int = 1200, cancel_first: bool = True):
+    """Automatically speak text once per unique key."""
+    _speech_script_for_sequence([text], unique_key, delay_ms=delay_ms, pause_ms=0, cancel_first=cancel_first)
+
+
+def auto_speak_sequence_once(texts: list[str], unique_key: str, delay_ms: int = 1200, pause_ms: int = 850, cancel_first: bool = True):
+    """Automatically speak a short sequence once per unique key."""
+    _speech_script_for_sequence(texts, unique_key, delay_ms=delay_ms, pause_ms=pause_ms, cancel_first=cancel_first)
 
 def browser_speech_box(box_id: str, label: str = "🎙 Record answer with browser speech"):
     """Browser-only speech-to-text helper. User copies transcript into Streamlit answer field."""
@@ -364,11 +398,12 @@ elif module == "Civics Practice":
 
     use_hard_questions = st.toggle("Use hard/reworded civics questions", value=False)
     if use_hard_questions:
-        civics = load_first_existing(["questions_hard.json", "civics_hard.json", "civics_sample.json"])
-        st.caption("Question source: hard/reworded file")
+        civics, civics_filename = load_first_existing_with_name(["questions_hard.json", "civics_hard.json", "civics_sample.json"])
+        st.caption(f"Question source: hard/reworded file — `{civics_filename}`")
     else:
-        civics = load_first_existing(["questions.json", "civics.json", "civics_128.json", "civics_full.json", "civics_sample.json"])
-        st.caption("Question source: standard questions file")
+        # Default must be the standard USCIS question file. Only fall back if it is not present.
+        civics, civics_filename = load_first_existing_with_name(["questions.json", "civics_128.json", "civics_full.json", "civics.json", "civics_sample.json"])
+        st.caption(f"Question source: standard file — `{civics_filename}`")
 
     questions = civics.get("questions", [])
     session_len = min(20, len(questions))
@@ -376,7 +411,7 @@ elif module == "Civics Practice":
     if not questions:
         st.error("No civics questions found.")
     else:
-        civics_source_key = "hard" if use_hard_questions else "standard"
+        civics_source_key = f"{'hard' if use_hard_questions else 'standard'}:{civics_filename}:{len(questions)}"
         if (
             "civics_exam_indices" not in st.session_state
             or not st.session_state.civics_exam_indices
@@ -384,6 +419,7 @@ elif module == "Civics Practice":
         ):
             reset_civics_exam(questions, session_len=20)
             st.session_state.civics_source_key = civics_source_key
+            st.session_state.civics_last_recorder_text = ""
 
         # If the session is complete, allow a clean restart.
         if st.session_state.civics_exam_pos >= len(st.session_state.civics_exam_indices):
@@ -415,36 +451,44 @@ elif module == "Civics Practice":
             just_got_correct = feedback in ("correct", "mc_correct")
             if just_got_correct:
                 st.success("Correct. Next question.")
-                # Speak the confirmation and the next question in ONE utterance.
-                # This avoids the browser dropping the automatic next-question voice after a rerun.
-                auto_speak_once(
-                    f"Correct. Next question. {item['question']}",
+                # Speak confirmation, pause, then ask the next question.
+                # The pause helps prevent the next officer voice from starting quiet or clipped.
+                auto_speak_sequence_once(
+                    ["Correct. Next question.", item["question"]],
                     f"civics_correct_and_question_{pos}_{q_index}_{st.session_state.civics_answered}",
-                    delay_ms=500,
+                    delay_ms=900,
+                    pause_ms=1100,
                     cancel_first=True,
                 )
                 st.session_state.civics_feedback = None
             else:
                 # First load / normal question change: officer asks automatically.
-                auto_speak_once(item["question"], f"civics_question_{pos}_{q_index}", delay_ms=900, cancel_first=True)
+                auto_speak_once(item["question"], f"civics_question_{pos}_{q_index}_{civics_filename}", delay_ms=1400, cancel_first=True)
 
             st.markdown("### Listen to the officer question")
             speak_button(item["question"], label="▶ Replay officer question")
             st.markdown("### Answer by voice")
             st.caption("Click Record, answer out loud, then stop. The app shows what it heard and checks the answer automatically.")
 
-            # Use a fresh recorder key per question so the record button always reappears after multiple-choice recovery.
-            transcript = record_answer_box(f"civics_voice_recorder_{pos}_{q_index}")
+            # Keep one stable recorder component. Changing the key can make the browser ask
+            # for microphone permission again on every question.
+            transcript = record_answer_box("civics_voice_recorder_stable")
             if transcript:
-                st.info(f"Heard: {transcript}")
-                processed_key = f"{pos}|{q_index}|{normalize(transcript)}"
-                if st.session_state.get("civics_last_processed_voice") != processed_key:
-                    st.session_state.civics_last_processed_voice = processed_key
-                    process_civics_response(transcript, item, expected_answers, source="voice")
-                    if answer_is_blank(transcript):
-                        st.error("No answer heard. Blank answers do not pass.")
-                    else:
-                        st.rerun()
+                clean_transcript = normalize(transcript)
+                last_recorder_text = st.session_state.get("civics_last_recorder_text", "")
+                processed_key = f"{pos}|{q_index}|{clean_transcript}"
+                # With a stable component key, Streamlit may briefly replay the previous transcript
+                # after a rerun. Ignore it until the student records something new.
+                if clean_transcript and clean_transcript != last_recorder_text:
+                    st.info(f"Heard: {transcript}")
+                    if st.session_state.get("civics_last_processed_voice") != processed_key:
+                        st.session_state.civics_last_processed_voice = processed_key
+                        st.session_state.civics_last_recorder_text = clean_transcript
+                        process_civics_response(transcript, item, expected_answers, source="voice")
+                        if answer_is_blank(transcript):
+                            st.error("No answer heard. Blank answers do not pass.")
+                        else:
+                            st.rerun()
 
             if st.session_state.get("civics_feedback") == "wrong" and st.session_state.get("civics_show_mc"):
                 st.warning("Not quite. Try the multiple-choice fallback.")
@@ -484,7 +528,7 @@ elif module == "Civics Practice":
                         st.rerun()
 
             with st.expander("Session controls"):
-                st.write(f"This practice session asks up to **20 questions**. Current data file has **{len(questions)} questions**, so this session has **{len(st.session_state.civics_exam_indices)}** questions.")
+                st.write(f"This practice session asks up to **20 questions** from **{civics_filename}**. Current data file has **{len(questions)} questions**, so this session has **{len(st.session_state.civics_exam_indices)}** questions.")
                 if st.button("Restart civics practice"):
                     reset_civics_exam(questions, session_len=20)
                     st.rerun()

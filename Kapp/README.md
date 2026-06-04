@@ -63,3 +63,11 @@ The record button uses `streamlit-mic-recorder`, which relies on browser speech 
 - If those files are missing, the app falls back to the older `civics*.json` sample files.
 - Correct voice or multiple-choice answers now trigger spoken feedback: “Correct. Next question.”
 - The next officer question is delayed slightly to avoid clipped or muted audio at the start.
+
+## Civics voice fix 6
+
+- The standard civics source is now tied to the actual loaded filename and resets the session if the file changes.
+- Standard mode loads `data/questions.json` first. Hard mode loads `data/questions_hard.json` first.
+- The mic recorder now uses one stable component key to reduce repeated browser microphone permission prompts.
+- The app ignores stale recorder transcripts after reruns so the previous answer is not accidentally applied to the next question.
+- Spoken feedback is separated into two utterances with a pause: “Correct. Next question.” then the next officer question.
