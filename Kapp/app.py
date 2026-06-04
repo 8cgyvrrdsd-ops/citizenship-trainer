@@ -46,6 +46,50 @@ def load_first_existing_with_name(filenames: list[str]) -> tuple[dict, str]:
     return load_json(filenames[-1]), filenames[-1]
 
 
+def normalize_civics_questions(civics_data):
+    """Accept either USCIS civics JSON shape:
+    1) {"questions": [{"question": "...", "answers": [...]}, ...]}
+    2) [{"question": "...", "answers": [...]}, ...]
+    Also tolerates common key names like answer, correct_answer, q, and a.
+    """
+    if isinstance(civics_data, dict):
+        raw_questions = civics_data.get("questions", [])
+    elif isinstance(civics_data, list):
+        raw_questions = civics_data
+    else:
+        return []
+
+    normalized = []
+    for item in raw_questions:
+        if not isinstance(item, dict):
+            continue
+        question = (
+            item.get("question")
+            or item.get("Question")
+            or item.get("q")
+            or item.get("prompt")
+            or item.get("text")
+            or ""
+        )
+        answers = (
+            item.get("answers")
+            or item.get("answer")
+            or item.get("Answer")
+            or item.get("correct_answers")
+            or item.get("correct_answer")
+            or item.get("a")
+            or []
+        )
+        if isinstance(answers, str):
+            answers = [answers]
+        elif not isinstance(answers, list):
+            answers = []
+        answers = [str(a).strip() for a in answers if str(a).strip()]
+        if str(question).strip() and answers:
+            normalized.append({"question": str(question).strip(), "answers": answers})
+    return normalized
+
+
 def normalize(text: str) -> str:
     text = (text or "").lower().strip()
     text = text.replace("u.s.", "us")
@@ -405,7 +449,7 @@ elif module == "Civics Practice":
         civics, civics_filename = load_first_existing_with_name(["questions.json"])
         st.caption(f"Question source: standard file — `{civics_filename}`")
 
-    questions = civics.get("questions", [])
+    questions = normalize_civics_questions(civics)
     session_len = min(20, len(questions))
 
     if not questions:
